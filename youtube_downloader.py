@@ -1,11 +1,11 @@
 """
-YTDROP v4 - YouTube Downloader (All errors fixed)
+YTDROP v5 — YouTube Downloader (All functions working)
 
 INSTALL:
     pip install customtkinter yt-dlp Pillow requests
 
 FOR 1080p/4K (ffmpeg):
-    winget install ffmpeg      (Windows - run in cmd, then RESTART cmd/app)
+    winget install ffmpeg      (Windows — run in cmd, then RESTART cmd/app)
     brew install ffmpeg        (Mac)
     sudo apt install ffmpeg    (Linux)
 
@@ -19,18 +19,25 @@ import threading
 import os
 import re
 import ssl
+import sys
 import shutil
 import subprocess
 import requests
+import urllib3
 from PIL import Image
 from io import BytesIO
 from tkinter import filedialog, messagebox
 
+# Suppress SSL warnings (needed for some restricted networks)
 ssl._create_default_https_context = ssl._create_unverified_context
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+# ---------------------------------------------------------------------------
+# Color palette
+# ---------------------------------------------------------------------------
 C = {
     "bg":      "#080810",
     "card":    "#0F0F1A",
@@ -54,16 +61,12 @@ C = {
 # even when ffmpeg is NOT added to the system PATH yet.
 # ---------------------------------------------------------------------------
 def _find_ffmpeg():
-    # 1. Already on PATH?
     p = shutil.which("ffmpeg")
     if p:
         return p
-
-    local      = os.environ.get("LOCALAPPDATA", "")
-    appdata    = os.environ.get("APPDATA", "")
+    local       = os.environ.get("LOCALAPPDATA", "")
     userprofile = os.path.expanduser("~")
 
-    # 2. winget drops packages under %LOCALAPPDATA%\Microsoft\WinGet\Packages\
     winget_root = os.path.join(local, "Microsoft", "WinGet", "Packages")
     if os.path.isdir(winget_root):
         for dirpath, dirnames, filenames in os.walk(winget_root):
@@ -74,27 +77,33 @@ def _find_ffmpeg():
             if "ffmpeg.exe" in filenames:
                 candidate = os.path.join(dirpath, "ffmpeg.exe")
                 try:
-                    r = subprocess.run([candidate, "-version"],
-                                       capture_output=True, timeout=5)
+                    r = subprocess.run(
+                        [candidate, "-version"],
+                        capture_output=True, timeout=5,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                        if sys.platform == "win32" else 0,
+                    )
                     if r.returncode == 0:
                         return candidate
                 except Exception:
                     pass
 
-    # 3. WindowsApps (some winget packages go here)
     winapps = os.path.join(local, "Microsoft", "WindowsApps")
     if os.path.isdir(winapps):
         candidate = os.path.join(winapps, "ffmpeg.exe")
         if os.path.isfile(candidate):
             try:
-                r = subprocess.run([candidate, "-version"],
-                                   capture_output=True, timeout=5)
+                r = subprocess.run(
+                    [candidate, "-version"],
+                    capture_output=True, timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                    if sys.platform == "win32" else 0,
+                )
                 if r.returncode == 0:
                     return candidate
             except Exception:
                 pass
 
-    # 4. Common manual / choco / scoop paths
     candidates = [
         os.path.join("C:\\", "ffmpeg", "bin", "ffmpeg.exe"),
         os.path.join("C:\\", "Program Files", "ffmpeg", "bin", "ffmpeg.exe"),
@@ -107,13 +116,16 @@ def _find_ffmpeg():
     for candidate in candidates:
         if os.path.isfile(candidate):
             try:
-                r = subprocess.run([candidate, "-version"],
-                                   capture_output=True, timeout=5)
+                r = subprocess.run(
+                    [candidate, "-version"],
+                    capture_output=True, timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                    if sys.platform == "win32" else 0,
+                )
                 if r.returncode == 0:
                     return candidate
             except Exception:
                 pass
-
     return None
 
 FFMPEG_PATH = _find_ffmpeg()
@@ -128,9 +140,9 @@ CLIENTS = [
 # ---------------------------------------------------------------------------
 def fmt_bytes(b):
     if not b: return "?"
-    if b >= 1_073_741_824: return f"{b/1_073_741_824:.1f} GB"
-    if b >= 1_048_576:     return f"{b/1_048_576:.1f} MB"
-    return f"{b/1024:.0f} KB"
+    if b >= 1_073_741_824: return f"{b / 1_073_741_824:.1f} GB"
+    if b >= 1_048_576: return f"{b / 1_048_576:.1f} MB"
+    return f"{b / 1024:.0f} KB"
 
 def fmt_dur(s):
     if not s: return "0:00"
@@ -142,18 +154,13 @@ def clean(n):
 
 def base_opts(extra=None):
     opts = {
-        "quiet":              True,
-        "no_warnings":        True,
-        "nocheckcertificate": True,
-        "socket_timeout":     30,
-        "retries":            5,
+        "quiet": True, "no_warnings": True, "nocheckcertificate": True,
+        "socket_timeout": 30, "retries": 5,
         "abort_on_unavailable_fragments": False,
         "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/124.0.0.0 Safari/537.36"),
             "Accept-Language": "en-US,en;q=0.9",
         },
     }
@@ -195,125 +202,89 @@ RES = {
 }
 
 def extract_formats(info):
-    out  = []
-    seen = set()
+    out, seen = [], set()
     fmts = info.get("formats", [])
-
     all_video  = [f for f in fmts if f.get("vcodec","none") != "none" and f.get("height")]
     combined   = [f for f in all_video if f.get("acodec","none") != "none"]
     video_only = [f for f in all_video if f.get("acodec","none") == "none"]
     audio_only = sorted(
         [f for f in fmts if f.get("vcodec","none")=="none" and f.get("acodec","none")!="none"],
-        key=lambda x: x.get("abr", 0) or 0, reverse=True,
-    )
+        key=lambda x: x.get("abr",0) or 0, reverse=True)
     best_audio_id = audio_only[0]["format_id"] if audio_only else "bestaudio"
 
-    combined_by_h  = {}
-    for f in sorted(combined,    key=lambda x: (x.get("height",0), x.get("tbr",0) or 0), reverse=True):
+    combined_by_h = {}
+    for f in sorted(combined, key=lambda x: (x.get("height",0), x.get("tbr",0) or 0), reverse=True):
         h = f.get("height",0)
-        if h not in combined_by_h:  combined_by_h[h] = f
+        if h not in combined_by_h: combined_by_h[h] = f
     vidonly_by_h = {}
-    for f in sorted(video_only,  key=lambda x: (x.get("height",0), x.get("tbr",0) or 0), reverse=True):
+    for f in sorted(video_only, key=lambda x: (x.get("height",0), x.get("tbr",0) or 0), reverse=True):
         h = f.get("height",0)
         if h not in vidonly_by_h: vidonly_by_h[h] = f
 
-    all_heights = sorted(set(list(combined_by_h) + list(vidonly_by_h)), reverse=True)
-
+    all_heights = sorted(set(list(combined_by_h)+list(vidonly_by_h)), reverse=True)
     for h in all_heights:
-        if h not in RES or h in seen:
-            continue
+        if h not in RES or h in seen: continue
         label, badge, color = RES[h]
-        cf = combined_by_h.get(h)
-        vf = vidonly_by_h.get(h)
+        cf, vf = combined_by_h.get(h), vidonly_by_h.get(h)
         best_f = vf or cf
-        fps   = best_f.get("fps", 0) or 0
-        vcodec= (best_f.get("vcodec") or "")[:12]
-        size  = fmt_bytes(best_f.get("filesize") or best_f.get("filesize_approx"))
-        tbr   = best_f.get("tbr", 0) or 0
-        needs_merge = (h > 720)
+        fps = best_f.get("fps",0) or 0
+        vcodec = (best_f.get("vcodec") or "")[:12]
+        size = fmt_bytes(best_f.get("filesize") or best_f.get("filesize_approx"))
+        tbr = best_f.get("tbr",0) or 0
+        needs_merge = h > 720
         note = ""
-
         if needs_merge and not FFMPEG_OK:
             if cf:
                 fmt_str = f"{cf['format_id']}/best[height<={h}][ext=mp4]/best[height<={h}]"
-                note    = " (no-ffmpeg fallback)"
-                color   = C["amber"]
-            else:
-                continue
+                note = " (no-ffmpeg fallback)"; color = C["amber"]
+            else: continue
         elif FFMPEG_OK:
             if vf:
                 fmt_str = (f"{vf['format_id']}+{best_audio_id}"
-                           f"/bestvideo[height<={h}]+bestaudio"
-                           f"/best[height<={h}]")
-            elif cf:
-                fmt_str = f"{cf['format_id']}/best[height<={h}]"
-            else:
-                continue
+                           f"/bestvideo[height<={h}]+bestaudio/best[height<={h}]")
+            elif cf: fmt_str = f"{cf['format_id']}/best[height<={h}]"
+            else: continue
         else:
-            if cf:
-                fmt_str = f"{cf['format_id']}/best[height<={h}][ext=mp4]/best[height<={h}]"
-            elif vf:
-                fmt_str = f"{vf['format_id']}+{best_audio_id}/best[height<={h}]"
-            else:
-                continue
-
+            if cf: fmt_str = f"{cf['format_id']}/best[height<={h}][ext=mp4]/best[height<={h}]"
+            elif vf: fmt_str = f"{vf['format_id']}+{best_audio_id}/best[height<={h}]"
+            else: continue
         seen.add(h)
-        out.append({
-            "type": "video", "label": label + note, "badge": badge, "color": color,
-            "fps": f"{fps:.0f}fps" if fps else "", "bitrate": f"{tbr:.0f}kbps" if tbr else "",
-            "size": size, "format_str": fmt_str, "height": h,
-            "vcodec": vcodec, "needs_ffmpeg": needs_merge,
-        })
+        out.append({"type":"video","label":label+note,"badge":badge,"color":color,
+                     "fps":f"{fps:.0f}fps" if fps else "","bitrate":f"{tbr:.0f}kbps" if tbr else "",
+                     "size":size,"format_str":fmt_str,"height":h,"vcodec":vcodec,"needs_ffmpeg":needs_merge})
 
     seen_ext = set()
     for f in audio_only:
         ext = f.get("ext","m4a")
         if ext in seen_ext: continue
         seen_ext.add(ext)
-        out.append({
-            "type": "audio", "label": f"Audio {ext.upper()}", "badge": ext.upper(),
-            "color": C["purple"], "fps": "",
-            "bitrate": f"{f.get('abr',0) or 0:.0f}kbps" if f.get("abr") else "",
-            "size": fmt_bytes(f.get("filesize") or f.get("filesize_approx")),
-            "format_str": f.get("format_id","bestaudio"), "height": 0,
-            "mp3": False, "needs_ffmpeg": False,
-        })
-
+        out.append({"type":"audio","label":f"Audio {ext.upper()}","badge":ext.upper(),
+                     "color":C["purple"],"fps":"",
+                     "bitrate":f"{f.get('abr',0) or 0:.0f}kbps" if f.get("abr") else "",
+                     "size":fmt_bytes(f.get("filesize") or f.get("filesize_approx")),
+                     "format_str":f.get("format_id","bestaudio"),"height":0,"mp3":False,"needs_ffmpeg":False})
     if FFMPEG_OK:
-        out.append({
-            "type": "audio", "label": "Audio MP3 (Best)", "badge": "MP3",
-            "color": C["purple"], "fps": "", "bitrate": "Best quality", "size": "~varies",
-            "format_str": "bestaudio/best", "height": 0, "mp3": True, "needs_ffmpeg": True,
-        })
+        out.append({"type":"audio","label":"Audio MP3 (Best)","badge":"MP3","color":C["purple"],
+                     "fps":"","bitrate":"Best quality","size":"~varies","format_str":"bestaudio/best",
+                     "height":0,"mp3":True,"needs_ffmpeg":True})
     else:
-        out.append({
-            "type": "audio", "label": "Audio M4A (Best — no ffmpeg needed)", "badge": "M4A",
-            "color": C["purple"], "fps": "", "bitrate": "Best quality", "size": "~varies",
-            "format_str": "bestaudio[ext=m4a]/bestaudio", "height": 0,
-            "mp3": False, "needs_ffmpeg": False,
-        })
+        out.append({"type":"audio","label":"Audio M4A (Best — no ffmpeg needed)","badge":"M4A",
+                     "color":C["purple"],"fps":"","bitrate":"Best quality","size":"~varies",
+                     "format_str":"bestaudio[ext=m4a]/bestaudio","height":0,"mp3":False,"needs_ffmpeg":False})
     return out
 
 def friendly(raw):
     r = raw.lower()
     if "ffmpeg" in r:
         path_hint = f"\nFound at: {FFMPEG_PATH}" if FFMPEG_PATH else "\nffmpeg not found on this system."
-        return ("FFmpeg error. Run:  winget install ffmpeg  in Command Prompt, "
-                "then restart this app." + path_hint)
-    if "ssl" in r or "certificate" in r:
-        return "SSL error — run:  pip install -U yt-dlp  then restart."
-    if "sign in" in r or "age" in r:
-        return "Age-restricted video — cannot download without sign-in."
-    if "private" in r:
-        return "This video is private."
-    if "playback on other websites" in r or "has been disabled" in r:
-        return "This video blocks external playback (owner restriction)."
-    if "unavailable" in r or "removed" in r:
-        return "Video unavailable or removed from YouTube."
-    if "requested format is not available" in r:
-        return "That format is unavailable for this video. Try a lower quality."
-    if "player response" in r or "403" in r or "forbidden" in r:
-        return "YouTube blocked the request. Try:  pip install -U yt-dlp"
+        return "FFmpeg error. Run:  winget install ffmpeg  then restart." + path_hint
+    if "ssl" in r or "certificate" in r: return "SSL error — run:  pip install -U yt-dlp"
+    if "sign in" in r or "age" in r: return "Age-restricted video — cannot download without sign-in."
+    if "private" in r: return "This video is private."
+    if "playback on other websites" in r: return "This video blocks external playback."
+    if "unavailable" in r or "removed" in r: return "Video unavailable or removed."
+    if "requested format is not available" in r: return "Format unavailable. Try lower quality."
+    if "403" in r or "forbidden" in r: return "YouTube blocked request. pip install -U yt-dlp"
     return f"Error: {raw[:220]}"
 
 
@@ -321,7 +292,7 @@ def friendly(raw):
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("YTDROP v4")
+        self.title("YTDROP v5")
         self.geometry("880x980")
         self.minsize(700, 600)
         self.configure(fg_color=C["bg"])
@@ -332,6 +303,7 @@ class App(ctk.CTk):
         self._dl_active = False
         self._fmt_btns  = []
         self._ci        = None
+        self._last_file = None
         self._build()
 
     def _build(self):
@@ -340,66 +312,63 @@ class App(ctk.CTk):
         hi = ctk.CTkFrame(hdr, fg_color="transparent")
         hi.pack(fill="both", expand=True, padx=24)
 
-        ctk.CTkLabel(hi, text="▶  YTDROP",
-                     font=ctk.CTkFont("Courier New", 22, "bold"),
+        ctk.CTkLabel(hi, text="▶  YTDROP", font=ctk.CTkFont("Courier New", 22, "bold"),
                      text_color=C["accent"]).pack(side="left", pady=14)
-        ctk.CTkLabel(hi, text="v4",
-                     font=ctk.CTkFont("Courier New", 11), text_color=C["muted"]
-                     ).pack(side="left", padx=(8,0), pady=14)
+        ctk.CTkLabel(hi, text="v5", font=ctk.CTkFont("Courier New", 11),
+                     text_color=C["muted"]).pack(side="left", padx=(8,0), pady=14)
 
         if FFMPEG_OK:
-            badge_color = "#1a4a2e"
-            badge_text  = f" ✓ FFmpeg ready — 1080p/4K enabled "
-            badge_tc    = C["green"]
+            badge_color, badge_text, badge_tc = "#1a4a2e", " ✓ FFmpeg ready — 1080p/4K enabled ", C["green"]
         else:
-            badge_color = "#3a1f0a"
-            badge_text  = " ⚠ FFmpeg not found — max 720p "
-            badge_tc    = C["amber"]
+            badge_color, badge_text, badge_tc = "#3a1f0a", " ⚠ FFmpeg not found — max 720p ", C["amber"]
 
         bf = ctk.CTkFrame(hi, fg_color=badge_color, corner_radius=8)
         bf.pack(side="right", pady=18)
-        ctk.CTkLabel(bf, text=badge_text,
-                     font=ctk.CTkFont("Courier New", 9, "bold"),
+        ctk.CTkLabel(bf, text=badge_text, font=ctk.CTkFont("Courier New", 9, "bold"),
                      text_color=badge_tc).pack(padx=8, pady=4)
 
-        self._body = ctk.CTkScrollableFrame(
-            self, fg_color=C["bg"], corner_radius=0,
-            scrollbar_fg_color=C["surface"], scrollbar_button_color=C["dim"]
-        )
+        self._body = ctk.CTkScrollableFrame(self, fg_color=C["bg"], corner_radius=0,
+            scrollbar_fg_color=C["surface"], scrollbar_button_color=C["dim"])
         self._body.pack(fill="both", expand=True)
-
         self._url_section()
         if not FFMPEG_OK:
             self._ffmpeg_banner()
 
-        self._info_card = self._make_card(self._body)
-        self._fmt_card  = self._make_card(self._body)
-        self._dl_card   = self._make_card(self._body)
-        self._info_card.master.pack_forget()
-        self._fmt_card.master.pack_forget()
-        self._dl_card.master.pack_forget()
+        # Stable wrapper frames for correct re-pack order
+        self._info_wrapper = ctk.CTkFrame(self._body, fg_color="transparent")
+        self._fmt_wrapper  = ctk.CTkFrame(self._body, fg_color="transparent")
+        self._dl_wrapper   = ctk.CTkFrame(self._body, fg_color="transparent")
+        self._info_wrapper.pack(fill="x")
+        self._fmt_wrapper.pack(fill="x")
+        self._dl_wrapper.pack(fill="x")
+
+        self._info_card = self._make_card(self._info_wrapper)
+        self._fmt_card  = self._make_card(self._fmt_wrapper)
+        self._dl_card   = self._make_card(self._dl_wrapper)
+        self._hide_cards()
+
+    def _hide_cards(self):
+        for wrapper in (self._info_wrapper, self._fmt_wrapper, self._dl_wrapper):
+            for child in wrapper.winfo_children():
+                child.pack_forget()
+
+    def _show_card(self, card):
+        card.master.pack(fill="x", padx=18, pady=(0, 12))
 
     def _ffmpeg_banner(self):
         banner = ctk.CTkFrame(self._body, fg_color="#1E1200", corner_radius=12,
                                border_width=1, border_color="#3a2800")
-        banner.pack(fill="x", padx=18, pady=(0,12))
+        banner.pack(fill="x", padx=18, pady=(0, 12))
         bi = ctk.CTkFrame(banner, fg_color="transparent")
         bi.pack(fill="x", padx=16, pady=12)
-        ctk.CTkLabel(bi,
-            text="⚠  FFmpeg not found. Qualities above 720p require FFmpeg to merge video+audio.",
+        ctk.CTkLabel(bi, text="⚠  FFmpeg not found. Qualities above 720p require FFmpeg.",
             font=ctk.CTkFont("Courier New", 11), text_color=C["amber"],
             wraplength=780, justify="left").pack(anchor="w")
-        ctk.CTkLabel(bi,
-            text=("Install:  Windows → open Command Prompt as Admin → winget install ffmpeg → then RESTART this app\n"
-                  "Mac → brew install ffmpeg    Linux → sudo apt install ffmpeg"),
+        ctk.CTkLabel(bi, text="Install: Windows → winget install ffmpeg → restart app",
             font=ctk.CTkFont("Courier New", 10), text_color=C["muted"],
             wraplength=780, justify="left").pack(anchor="w", pady=(4,0))
-        ctk.CTkLabel(bi,
-            text=f"Debug: ffmpeg search result = {FFMPEG_PATH or 'NOT FOUND'}",
-            font=ctk.CTkFont("Courier New", 9), text_color=C["dim"],
-            wraplength=780, justify="left").pack(anchor="w", pady=(2,0))
 
-    def _make_card(self, parent, pady=(0,12)):
+    def _make_card(self, parent, pady=(0, 12)):
         outer = ctk.CTkFrame(parent, fg_color=C["card"], corner_radius=16,
                              border_width=1, border_color=C["border"])
         outer.pack(fill="x", padx=18, pady=pady)
@@ -408,8 +377,7 @@ class App(ctk.CTk):
         return inner
 
     def _sec_label(self, parent, text):
-        ctk.CTkLabel(parent, text=text,
-                     font=ctk.CTkFont("Courier New", 9, "bold"),
+        ctk.CTkLabel(parent, text=text, font=ctk.CTkFont("Courier New", 9, "bold"),
                      text_color=C["muted"]).pack(anchor="w", pady=(0,10))
 
     def _url_section(self):
@@ -417,23 +385,20 @@ class App(ctk.CTk):
         self._sec_label(f, "① PASTE YOUTUBE URL")
         row = ctk.CTkFrame(f, fg_color="transparent"); row.pack(fill="x")
         self._url_var = ctk.StringVar()
-        self._entry = ctk.CTkEntry(
-            row, textvariable=self._url_var,
+        self._entry = ctk.CTkEntry(row, textvariable=self._url_var,
             placeholder_text="https://www.youtube.com/watch?v=...",
             height=52, corner_radius=12,
             fg_color=C["surface"], border_color=C["border"], border_width=1,
             text_color=C["primary"], placeholder_text_color=C["dim"],
-            font=ctk.CTkFont("Courier New", 13)
-        )
+            font=ctk.CTkFont("Courier New", 13))
         self._entry.pack(side="left", fill="x", expand=True, padx=(0,10))
         self._entry.bind("<Return>", lambda e: self._do_fetch())
-        self._fbtn = ctk.CTkButton(
-            row, text="FETCH  →", width=130, height=52, corner_radius=12,
+        self._fbtn = ctk.CTkButton(row, text="FETCH  →", width=130, height=52, corner_radius=12,
             fg_color=C["accent"], hover_color=C["accent2"],
             text_color="white", font=ctk.CTkFont("Courier New", 13, "bold"),
-            command=self._do_fetch
-        )
+            command=self._do_fetch)
         self._fbtn.pack(side="right")
+
         brow = ctk.CTkFrame(f, fg_color="transparent"); brow.pack(fill="x", pady=(8,0))
         ctk.CTkButton(brow, text="⊕  Paste", height=30, width=100,
                       fg_color="transparent", hover_color=C["hover"],
@@ -445,8 +410,8 @@ class App(ctk.CTk):
                       text_color=C["dim"], font=ctk.CTkFont("Courier New",11),
                       border_width=1, border_color=C["border"], corner_radius=8,
                       command=self._clear_url).pack(side="left", padx=(8,0))
-        self._slbl = ctk.CTkLabel(f, text="",
-                                   font=ctk.CTkFont("Courier New", 11),
+
+        self._slbl = ctk.CTkLabel(f, text="", font=ctk.CTkFont("Courier New", 11),
                                    text_color=C["muted"], wraplength=780, justify="left")
         self._slbl.pack(anchor="w", pady=(8,0))
 
@@ -456,9 +421,8 @@ class App(ctk.CTk):
 
     def _clear_url(self):
         self._url_var.set(""); self._setstatus("")
-        self._info_card.master.pack_forget()
-        self._fmt_card.master.pack_forget()
-        self._dl_card.master.pack_forget()
+        self._hide_cards()
+        self._info = None; self._formats = []; self._sel = None
 
     def _setstatus(self, txt, col=None):
         self._slbl.configure(text=txt, text_color=col or C["muted"])
@@ -471,9 +435,7 @@ class App(ctk.CTk):
             self._setstatus("⚠  Not a YouTube URL.", C["amber"]); return
         self._fbtn.configure(text="Loading…", state="disabled", fg_color=C["surface"])
         self._setstatus("⏳  Connecting…", C["muted"])
-        self._info_card.master.pack_forget()
-        self._fmt_card.master.pack_forget()
-        self._dl_card.master.pack_forget()
+        self._hide_cards()
         for card in (self._info_card, self._fmt_card, self._dl_card):
             for w in card.winfo_children(): w.destroy()
         threading.Thread(target=self._fetch_th, args=(url,), daemon=True).start()
@@ -500,7 +462,7 @@ class App(ctk.CTk):
     def _show_info(self):
         f = self._info_card
         for w in f.winfo_children(): w.destroy()
-        f.master.pack(fill="x", padx=18, pady=(0,12))
+        self._show_card(f)
         info = self._info
         self._sec_label(f, "② VIDEO INFO")
         row = ctk.CTkFrame(f, fg_color="transparent"); row.pack(fill="x")
@@ -526,16 +488,16 @@ class App(ctk.CTk):
         ]:
             if val:
                 r2 = ctk.CTkFrame(meta, fg_color="transparent"); r2.pack(anchor="w", pady=2)
-                ctk.CTkLabel(r2, text=f"{icon}  {val}",
-                             font=ctk.CTkFont("Courier New",11), text_color=C["muted"]
-                             ).pack(side="left")
+                ctk.CTkLabel(r2, text=f"{icon}  {val}", font=ctk.CTkFont("Courier New",11),
+                             text_color=C["muted"]).pack(side="left")
         self._show_formats()
 
     def _thumb(self, url, frame):
         try:
             r = requests.get(url, timeout=8, verify=False)
-            img = Image.open(BytesIO(r.content)).resize((180,101), Image.LANCZOS)
-            ci = ctk.CTkImage(img, size=(180,101))
+            r.raise_for_status()
+            img = Image.open(BytesIO(r.content)).resize((180, 101), Image.LANCZOS)
+            ci = ctk.CTkImage(img, size=(180, 101))
             self._ci = ci
             lbl = ctk.CTkLabel(frame, image=ci, text="")
             self.after(0, lambda: lbl.place(relx=0, rely=0, relwidth=1, relheight=1))
@@ -544,26 +506,24 @@ class App(ctk.CTk):
     def _show_formats(self):
         f = self._fmt_card
         for w in f.winfo_children(): w.destroy()
-        f.master.pack(fill="x", padx=18, pady=(0,12))
+        self._show_card(f)
         self._fmt_btns = []; self._sel = None
         self._sec_label(f, "③ SELECT QUALITY")
         if not FFMPEG_OK:
             nf = ctk.CTkFrame(f, fg_color="#1E1200", corner_radius=8, border_width=1, border_color="#3a2800")
             nf.pack(fill="x", pady=(0,10))
-            ctk.CTkLabel(nf, text="⚠  FFmpeg not installed — 1080p/4K hidden. Install FFmpeg and restart.",
+            ctk.CTkLabel(nf, text="⚠  FFmpeg not installed — 1080p/4K hidden.",
                          font=ctk.CTkFont("Courier New",10), text_color=C["amber"],
                          wraplength=700, justify="left").pack(padx=12, pady=8, anchor="w")
         vfmts = [x for x in self._formats if x["type"]=="video"]
         afmts = [x for x in self._formats if x["type"]=="audio"]
         if vfmts:
-            ctk.CTkLabel(f, text="VIDEO FORMATS",
-                         font=ctk.CTkFont("Courier New",9), text_color=C["dim"]
-                         ).pack(anchor="w", pady=(0,5))
+            ctk.CTkLabel(f, text="VIDEO FORMATS", font=ctk.CTkFont("Courier New",9),
+                         text_color=C["dim"]).pack(anchor="w", pady=(0,5))
             for fmt in vfmts: self._fmt_row(f, fmt)
         if afmts:
-            ctk.CTkLabel(f, text="AUDIO ONLY",
-                         font=ctk.CTkFont("Courier New",9), text_color=C["dim"]
-                         ).pack(anchor="w", pady=(12,5))
+            ctk.CTkLabel(f, text="AUDIO ONLY", font=ctk.CTkFont("Courier New",9),
+                         text_color=C["dim"]).pack(anchor="w", pady=(12,5))
             for fmt in afmts: self._fmt_row(f, fmt)
         self._build_dl()
 
@@ -571,18 +531,14 @@ class App(ctk.CTk):
         fr = ctk.CTkFrame(parent, fg_color=C["surface"], corner_radius=12,
                           border_width=1, border_color=C["border"])
         fr.pack(fill="x", pady=3)
-        ctk.CTkLabel(fr, text=fmt["badge"],
-                     font=ctk.CTkFont("Courier New",9,"bold"),
+        ctk.CTkLabel(fr, text=fmt["badge"], font=ctk.CTkFont("Courier New",9,"bold"),
                      text_color="white", fg_color=fmt["color"],
-                     corner_radius=6, width=44, height=22
-                     ).pack(side="left", padx=(12,10), pady=12)
-        ctk.CTkLabel(fr, text=fmt["label"],
-                     font=ctk.CTkFont("Courier New",12), text_color=C["primary"], anchor="w"
-                     ).pack(side="left", padx=4)
+                     corner_radius=6, width=44, height=22).pack(side="left", padx=(12,10), pady=12)
+        ctk.CTkLabel(fr, text=fmt["label"], font=ctk.CTkFont("Courier New",12),
+                     text_color=C["primary"], anchor="w").pack(side="left", padx=4)
         if fmt.get("vcodec"):
-            ctk.CTkLabel(fr, text=fmt["vcodec"],
-                         font=ctk.CTkFont("Courier New",9), text_color=C["dim"]
-                         ).pack(side="left", padx=4)
+            ctk.CTkLabel(fr, text=fmt["vcodec"], font=ctk.CTkFont("Courier New",9),
+                         text_color=C["dim"]).pack(side="left", padx=4)
         ctk.CTkFrame(fr, fg_color="transparent").pack(side="left", expand=True)
         details = "  ·  ".join(filter(None,[fmt.get("fps",""),fmt.get("bitrate",""),fmt.get("size","")]))
         if details:
@@ -609,21 +565,18 @@ class App(ctk.CTk):
         self._dlbtn.configure(
             text=f"⬇  DOWNLOAD  {f['label']}  [{ext_label}]",
             fg_color=C["accent"], hover_color=C["accent2"],
-            text_color="white", state="normal"
-        )
+            text_color="white", state="normal")
 
     def _build_dl(self):
         f = self._dl_card
         for w in f.winfo_children(): w.destroy()
-        f.master.pack(fill="x", padx=18, pady=(0,24))
+        self._show_card(f)
         self._sec_label(f, "④ SAVE LOCATION & DOWNLOAD")
-
         loc = ctk.CTkFrame(f, fg_color=C["surface"], corner_radius=12,
                             border_width=1, border_color=C["border"])
         loc.pack(fill="x", pady=(0,12))
         li = ctk.CTkFrame(loc, fg_color="transparent"); li.pack(fill="x", padx=14, pady=12)
-        ctk.CTkLabel(li, text="📁  Save to:",
-                     font=ctk.CTkFont("Courier New",11,"bold"),
+        ctk.CTkLabel(li, text="📁  Save to:", font=ctk.CTkFont("Courier New",11,"bold"),
                      text_color=C["primary"]).pack(side="left", padx=(0,10))
         self._dir_var = ctk.StringVar(value=self._save_dir)
         ctk.CTkEntry(li, textvariable=self._dir_var, height=38, corner_radius=8,
@@ -640,33 +593,34 @@ class App(ctk.CTk):
                      text_color=C["dim"]).pack(side="left", padx=(0,8))
         for label, path in [
             ("~/Downloads", os.path.expanduser("~/Downloads")),
-            ("~/Desktop",   os.path.expanduser("~/Desktop")),
-            ("~/Videos",    os.path.expanduser("~/Videos")),
-            ("~/Music",     os.path.expanduser("~/Music")),
+            ("~/Desktop", os.path.expanduser("~/Desktop")),
+            ("~/Videos", os.path.expanduser("~/Videos")),
+            ("~/Music", os.path.expanduser("~/Music")),
         ]:
             if os.path.isdir(path):
                 ctk.CTkButton(qr, text=label, height=26, corner_radius=6,
                               fg_color="transparent", border_width=1,
                               border_color=C["border"], hover_color=C["hover"],
                               text_color=C["muted"], font=ctk.CTkFont("Courier New",10),
-                              command=lambda p=path: self._set_dir(p)
-                              ).pack(side="left", padx=(0,6))
+                              command=lambda p=path: self._set_dir(p)).pack(side="left", padx=(0,6))
 
         self._prog = ctk.CTkProgressBar(f, height=8, corner_radius=4,
                                          fg_color=C["surface"], progress_color=C["accent"])
         self._prog.set(0)
         self._plbl = ctk.CTkLabel(f, text="", font=ctk.CTkFont("Courier New",11),
                                    text_color=C["muted"])
-        self._dlbtn = ctk.CTkButton(
-            f, text="⬇  SELECT A FORMAT FIRST",
-            height=58, corner_radius=14,
-            fg_color=C["surface"], hover_color=C["hover"],
+        self._dlbtn = ctk.CTkButton(f, text="⬇  SELECT A FORMAT FIRST",
+            height=58, corner_radius=14, fg_color=C["surface"], hover_color=C["hover"],
             border_width=1, border_color=C["border"],
             text_color=C["dim"], state="disabled",
-            font=ctk.CTkFont("Courier New",13,"bold"),
-            command=self._start_dl
-        )
+            font=ctk.CTkFont("Courier New",13,"bold"), command=self._start_dl)
         self._dlbtn.pack(fill="x", pady=(4,0))
+
+        self._open_btn = ctk.CTkButton(f, text="📂  Open Download Folder",
+            height=40, corner_radius=10, fg_color="transparent", hover_color=C["hover"],
+            border_width=1, border_color=C["green"],
+            text_color=C["green"], font=ctk.CTkFont("Courier New", 11, "bold"),
+            command=self._open_folder)
 
     def _browse(self):
         d = filedialog.askdirectory(initialdir=self._save_dir)
@@ -675,32 +629,48 @@ class App(ctk.CTk):
     def _set_dir(self, path):
         self._save_dir = path; self._dir_var.set(path)
 
+    def _open_folder(self):
+        path = self._dir_var.get().strip() or self._save_dir
+        if os.path.isdir(path):
+            if sys.platform == "win32": os.startfile(path)
+            elif sys.platform == "darwin": subprocess.Popen(["open", path])
+            else: subprocess.Popen(["xdg-open", path])
+
     def _start_dl(self):
         if self._dl_active or not self._sel: return
         save = self._dir_var.get().strip() or os.path.expanduser("~/Downloads")
         os.makedirs(save, exist_ok=True)
         self._dl_active = True
         self._dlbtn.configure(text="⏳  Downloading…", state="disabled", fg_color=C["surface"])
+        self._open_btn.pack_forget()
+        self._prog.configure(progress_color=C["accent"])
         self._prog.pack(fill="x", pady=(10,4)); self._prog.set(0)
-        self._plbl.pack(anchor="w"); self._plbl.configure(text="Starting…")
+        self._plbl.pack(anchor="w"); self._plbl.configure(text="Starting…", text_color=C["muted"])
         threading.Thread(target=self._dl_th, args=(self._sel, save), daemon=True).start()
 
     def _dl_th(self, fmt, save):
-        url   = self._url_var.get().strip()
+        url = self._url_var.get().strip()
         title = clean(self._info.get("title","video"))
 
         def hook(d):
             if d["status"] == "downloading":
-                try: pct = float(d.get("_percent_str","0%").strip("%"))/100
-                except: pct = 0
-                txt = (f"  {int(pct*100)}%  "
-                       f"{d.get('_downloaded_bytes_str','').strip()} / "
-                       f"{d.get('_total_bytes_str', d.get('_total_bytes_estimate_str','')).strip()}"
-                       f"   @ {d.get('_speed_str','').strip()}"
-                       f"   ETA {d.get('_eta_str','').strip()}")
+                try:
+                    pct = float(d.get("_percent_str","0%").strip().rstrip("%"))/100
+                except (ValueError, TypeError):
+                    pct = 0
+                downloaded = d.get("_downloaded_bytes_str","").strip()
+                total = d.get("_total_bytes_str", d.get("_total_bytes_estimate_str","")).strip()
+                speed = d.get("_speed_str","").strip()
+                eta = d.get("_eta_str","").strip()
+                txt = f"  {int(pct*100)}%"
+                if downloaded:
+                    txt += f"  {downloaded}"
+                    if total: txt += f" / {total}"
+                if speed: txt += f"   @ {speed}"
+                if eta: txt += f"   ETA {eta}"
                 self.after(0, lambda p=pct,t=txt: (self._prog.set(p), self._plbl.configure(text=t)))
             elif d["status"] == "finished":
-                self.after(0, lambda: (self._prog.set(1.0), self._plbl.configure(text="✓  Processing…")))
+                self.after(0, lambda: (self._prog.set(1.0), self._plbl.configure(text="✓  Processing / merging…")))
 
         opts = base_opts({"progress_hooks": [hook]})
         opts["outtmpl"] = os.path.join(save, f"{title}.%(ext)s")
@@ -708,17 +678,14 @@ class App(ctk.CTk):
         if fmt.get("mp3"):
             opts["format"] = "bestaudio/best"
             opts["postprocessors"] = [{"key":"FFmpegExtractAudio",
-                                        "preferredcodec":"mp3","preferredquality":"192"}]
+                                       "preferredcodec":"mp3","preferredquality":"192"}]
         elif fmt["type"] == "audio":
             opts["format"] = fmt["format_str"]
         else:
             opts["format"] = fmt["format_str"]
-            if FFMPEG_OK:
-                opts["merge_output_format"] = "mp4"
+            if FFMPEG_OK: opts["merge_output_format"] = "mp4"
 
-        success = False
-        last_err = Exception("unknown")
-
+        success, last_err = False, Exception("unknown")
         for client in CLIENTS:
             o = dict(opts)
             o["extractor_args"] = {"youtube": {"player_client": client}}
@@ -727,10 +694,17 @@ class App(ctk.CTk):
                     ydl.download([url])
                 success = True; break
             except Exception as e:
-                err_s = str(e).lower()
                 last_err = e
-                if "ffmpeg" in err_s: break
-                if "requested format is not available" in err_s: continue
+                if "ffmpeg" in str(e).lower(): break
+                continue
+
+        if not success and "ffmpeg" not in str(last_err).lower():
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ydl.download([url])
+                success = True
+            except Exception as e:
+                last_err = e
 
         if success:
             self.after(0, lambda: self._dl_done(save))
@@ -744,8 +718,22 @@ class App(ctk.CTk):
         self._plbl.configure(text=f"✓  Saved to: {save}", text_color=C["green"])
         self._dlbtn.configure(text="✓  DONE — CLICK TO DOWNLOAD AGAIN",
                               fg_color=C["green"], hover_color="#27AE60",
-                              text_color="white", state="normal", command=self._start_dl)
+                              text_color="white", state="normal", command=self._reset_for_redownload)
+        self._open_btn.pack(fill="x", pady=(8,0))
         messagebox.showinfo("Done!", f"Download complete!\nSaved to:\n{save}")
+
+    def _reset_for_redownload(self):
+        self._prog.pack_forget(); self._plbl.pack_forget(); self._open_btn.pack_forget()
+        self._prog.configure(progress_color=C["accent"]); self._prog.set(0)
+        self._plbl.configure(text="", text_color=C["muted"])
+        if self._sel:
+            ext_label = "MP4" if self._sel["type"]=="video" else self._sel.get("badge","")
+            self._dlbtn.configure(text=f"⬇  DOWNLOAD  {self._sel['label']}  [{ext_label}]",
+                fg_color=C["accent"], hover_color=C["accent2"],
+                text_color="white", state="normal", command=self._start_dl)
+        else:
+            self._dlbtn.configure(text="⬇  SELECT A FORMAT FIRST", fg_color=C["surface"],
+                hover_color=C["hover"], text_color=C["dim"], state="disabled", command=self._start_dl)
 
     def _dl_fail(self, msg):
         self._dl_active = False
