@@ -1,68 +1,48 @@
-# ☠ YT-BREACH — YouTube Video Downloader
+# YTDROP PRO — Premium YouTube Downloader
 
-A powerful YouTube video downloader with a hacker-themed UI built with Python and CustomTkinter.
+YTDROP PRO is a sleek, high-fidelity YouTube video and audio downloader tool built entirely in Python using a premium Material-based UI. It natively avoids common black-screen 1080p issues by integrating seamlessly with FFmpeg while offering clean, exact downloading logic mirroring your favorite modern browsers. 
 
-![Python](https://img.shields.io/badge/Python-3.8+-green?style=flat-square&logo=python)
-![License](https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square)
+![Build Status](https://img.shields.io/badge/Build-Stable-success)
+![Version](https://img.shields.io/badge/Version-8.3-blue)
+![Theme](https://img.shields.io/badge/Theme-Dark_Material-black)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Mac%20%7C%20Linux-lightgrey)
 
-## Features
+## ✨ Features
+* **Modern Box-Grid Interface**: Clean, boxed formatting selections built gracefully with `customtkinter`.
+* **Reliable Resolutions**: Direct 1080p, 2K, and 4K downloading! *Automatically utilizes FFmpeg inside containers.*
+* **Surgically Accurate Progress**: Chrome-style precise percentage monitoring down to the fractional decimal.
+* **Instant Pause & Cancel**: Natively pause or resume download streams midway through network fetching.
+* **Intelligent FFmpeg Handling**: Instantly locates pre-installed global or local `ffmpeg` paths.
+* **Drive Health Checks**: Displays current available data-storage capabilities directly in the app.
+* **Auto Error-Resilience**: Bypasses network blocks using advanced `yt-dlp` multi-platform client fallbacks.
 
-- 🎬 Download YouTube videos in all available qualities (144p to 4K)
-- 🎵 Download audio-only (M4A, MP3, WebM)
-- 💾 Real-time drive storage display for selected download location
-- 📊 Accurate download progress with speed, ETA, and elapsed time
-- 🖥️ Hacker/cyber-breach themed terminal UI
-- ⚡ Boot sequence animation on startup
-- 🔄 Multiple YouTube API client fallbacks for reliability
-- 🛡️ SSL bypass and User-Agent spoofing for maximum compatibility
+## ⚙️ Prerequisites
+To correctly run this application, it is recommended to run this on Python `3.9+`. You additionally must have FFmpeg installed for HD (1080p, 1440p, 2160p) videos without audio issues.
 
-## Installation
-
+**1. Install Python Libraries:**
 ```bash
-# Install dependencies
 pip install customtkinter yt-dlp Pillow requests
-
-# Optional: Install FFmpeg for 1080p/4K support
-# Windows
-winget install ffmpeg
-
-# Mac
-brew install ffmpeg
-
-# Linux
-sudo apt install ffmpeg
 ```
 
-## Usage
+**2. Install FFmpeg (Windows):**
+Run the following inside an Administrator PowerShell, or just install manually via Scoop.
+```bash
+winget install ffmpeg
+```
+*(Remember to restart your application or terminal after a fresh install!)*
 
+## 🚀 Running the App
+After installing prerequisites, run the launcher script using:
 ```bash
 python youtube_downloader.py
 ```
 
-1. Paste a YouTube URL
-2. Click **⚡ BREACH** to scan the video
-3. Select your desired quality/format
-4. Choose download location
-5. Click **⚡ EXTRACT** to download
+## 🛠️ Technical Details & Acknowledgements
+- **UI Framework**: `customtkinter`
+- **Fetching Engine**: `yt-dlp`
+- **Processing**: `FFmpeg` 
 
-## Version History
+The application utilizes an advanced network hooking state to manually prevent hanging chunks, parsing bytes down perfectly without reading terminal formatting ANSI escapes. 
 
-| Version | Description |
-|---------|-------------|
-| v4 | Original YTDROP — basic dark UI with full download functionality |
-| v5 | Bug fixes — fixed progress hooks, download retry logic, SSL warnings, proper UI state management |
-| v6 | Hacker UI — complete redesign with matrix-green terminal aesthetic, boot animation, glitch effects |
-| v7 | Final — fixed video playback (combined streams only without FFmpeg), greatly improved text readability, drive storage display |
-
-## Requirements
-
-- Python 3.8+
-- customtkinter
-- yt-dlp
-- Pillow
-- requests
-- FFmpeg (optional, for 1080p+ and MP3)
-
-## Author
-
-**Poojan Patel** — [@PoojanPatel7](https://github.com/PoojanPatel7)
+---
+*Created carefully as a fully featured local system script.*
