@@ -16,14 +16,19 @@
 
 **YTDROP PRO** is a remarkably aesthetic and high-performance video downloader tailored to power-users. Engineered with Python, wrapped in an elite Obsidian Cinematic UI, and powered seamlessly by `yt-dlp` and `FFmpeg`—this app lets you pull up to **8K resolutions** safely, fast, and drop-dead gorgeous.
 
-## 🌟 Sneak Peek
+## 🌟 UI Previews
 
-*(Add your screenshots here by dragging and dropping them!)*
+See the beautifully orchestrated interface natively in action!
 
-| Selection Grids | Fluid Downloading |
+| Format Selection Layout | Active Stream Polling |
 | :---: | :---: |
-| <img src="assets/selection_grid.png" alt="Card Grid Formats" width="400"/> | <img src="assets/downloading.png" alt="Progress HUD" width="400"/> |
-| **Flawless Formatting Box-Grids** | **Precision Byte-Calculated Downloads** |
+| <img src="assets/screen1.png" alt="Quality Selection" width="400"/> | <img src="assets/screen2.png" alt="Mid-Download Details" width="400"/> |
+| **Complete structured data bridging 8K-to-144p videos with audio streams.** | **Precision progress hook rendering exact fraction boundaries and live ETA estimates.** |
+
+| Instant Selection Confirmation | Execution & Directory Loading |
+| :---: | :---: |
+| <img src="assets/screen3.png" alt="Card confirmation" width="400"/> | <img src="assets/screen4.png" alt="Download completion" width="400"/> |
+| **Premium highlighting and aesthetic Apple-Blue selections.** | **A clean finalized prompt tracking elapsed speeds natively wrapping back to the user.** |
 
 ---
 
