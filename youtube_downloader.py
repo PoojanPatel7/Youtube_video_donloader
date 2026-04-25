@@ -945,6 +945,28 @@ class App(ctk.CTk):
             vlbl.pack(anchor="w")
             self._stat_labels[key] = vlbl
 
+        # ── Action row ──
+        self._act_row = ctk.CTkFrame(pi, fg_color="transparent")
+        self._act_row.pack(fill="x", pady=(12, 0))
+
+        self._pause_btn = ctk.CTkButton(
+            self._act_row, text="⏸ Pause", width=100, height=32, corner_radius=6,
+            fg_color=P["surface"], hover_color=P["hover"], text_color=P["white"],
+            border_width=1, border_color=P["border"],
+            command=self._toggle_pause,
+        )
+        self._pause_btn.pack(side="left", padx=(0, 10))
+
+        self._cancel_btn = ctk.CTkButton(
+            self._act_row, text="✕ Cancel", width=100, height=32, corner_radius=6,
+            fg_color=P["error_dim"], hover_color=P["error_dim"], text_color=P["error"],
+            border_width=1, border_color=P["error"],
+            command=self._cancel_dl,
+        )
+        self._cancel_btn.pack(side="left")
+
+        self._cancel_flag = False
+        self._pause_flag = False
         self._dl_start = time.time()
         self._tick_elapsed()
         threading.Thread(target=self._dl_th, args=(self._sel, save), daemon=True).start()
@@ -966,6 +988,15 @@ class App(ctk.CTk):
         title = clean(self._info.get("title", "video"))
 
         def hook(d):
+            if self._cancel_flag:
+                raise ValueError("Download cancelled by user")
+
+            while self._pause_flag and not self._cancel_flag:
+                time.sleep(0.5)
+
+            if self._cancel_flag:
+                raise ValueError("Download cancelled by user")
+
             if d["status"] == "downloading":
                 dl_bytes = d.get("downloaded_bytes")
                 total_bytes = d.get("total_bytes") or d.get("total_bytes_estimate")
@@ -1034,6 +1065,8 @@ class App(ctk.CTk):
 
         success, last_err = False, Exception("unknown")
         for client in CLIENTS:
+            if self._cancel_flag:
+                break
             o = dict(opts)
             o["extractor_args"] = {"youtube": {"player_client": client}}
             try:
@@ -1043,20 +1076,25 @@ class App(ctk.CTk):
                 break
             except Exception as e:
                 last_err = e
+                if self._cancel_flag or "cancelled" in str(e).lower():
+                    break
                 if "ffmpeg" in str(e).lower():
                     break
                 continue
 
-        if not success and "ffmpeg" not in str(last_err).lower():
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    ydl.download([url])
-                success = True
-            except Exception as e:
-                last_err = e
+        if not success and not self._cancel_flag and "ffmpeg" not in str(last_err).lower():
+            if not self._cancel_flag:
+                try:
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        ydl.download([url])
+                    success = True
+                except Exception as e:
+                    last_err = e
 
         if success:
             self.after(0, lambda: self._dl_done(save))
+        elif self._cancel_flag or "cancelled" in str(last_err).lower():
+            self.after(0, lambda: self._dl_fail("Download was successfully cancelled."))
         else:
             msg = friendly(str(last_err))
             self.after(0, lambda m=msg: self._dl_fail(m))
@@ -1105,20 +1143,46 @@ class App(ctk.CTk):
             )
         self._status.configure(text="Ready", text_color=P["text3"])
 
+    def _cancel_dl(self):
+        if not self._dl_active:
+            return
+        self._cancel_flag = True
+        if hasattr(self, '_cancel_btn'):
+            self._cancel_btn.configure(text="Cancelling...", state="disabled")
+        if hasattr(self, '_pause_btn'):
+            self._pause_btn.configure(state="disabled")
+
+    def _toggle_pause(self):
+        if not self._dl_active:
+            return
+        self._pause_flag = not self._pause_flag
+        if self._pause_flag:
+            self._pause_btn.configure(
+                text="▶ Resume", fg_color=P["accent"], border_color=P["accent"]
+            )
+            self._stat_labels["Speed"].configure(text="Paused")
+            self._status.configure(text="Paused", text_color=P["warn"])
+        else:
+            self._pause_btn.configure(
+                text="⏸ Pause", fg_color=P["surface"], border_color=P["border"]
+            )
+            self._status.configure(text="Downloading...", text_color=P["warn"])
+
     def _dl_fail(self, msg):
         self._dl_active = False
         self._prog.configure(progress_color=P["error"])
-        self._pct_lbl.configure(text="✗ Failed", text_color=P["error"])
+        self._pct_lbl.configure(text="✗ Cancelled" if "cancel" in msg.lower() else "✗ Failed", text_color=P["error"])
         self._eta_lbl.configure(text="")
-        self._stat_labels["Speed"].configure(text="Error")
-        self._status.configure(text="Failed", text_color=P["error"])
+        self._stat_labels["Speed"].configure(text="Stopped")
+        self._status.configure(text="Stopped", text_color=P["error"])
 
         self._dl_btn.configure(
-            text="✗  Failed — Click to retry",
+            text="↻  Restart download" if "cancel" in msg.lower() else "✗  Failed — Click to retry",
             fg_color=P["error_dim"], hover_color=P["hover"],
             text_color=P["error"], state="normal", command=self._start_dl,
         )
-        messagebox.showerror("Download Failed", msg)
+        if "cancel" not in msg.lower():
+            messagebox.showerror("Download Failed", msg)
 
 
 # ===========================================================================
