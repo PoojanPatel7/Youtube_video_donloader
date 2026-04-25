@@ -20,15 +20,21 @@
 
 See the beautifully orchestrated interface natively in action!
 
-| Format Selection Layout | Active Stream Polling |
-| :---: | :---: |
-| <img src="assets/screen1.png" alt="Quality Selection" width="400"/> | <img src="assets/screen2.png" alt="Mid-Download Details" width="400"/> |
-| **Complete structured data bridging 8K-to-144p videos with audio streams.** | **Precision progress hook rendering exact fraction boundaries and live ETA estimates.** |
+### Format Selection Layout
+Complete structured data bridging 8K-to-144p videos with audio streams.  
+![Quality Selection](assets/screen1.png)
 
-| Instant Selection Confirmation | Execution & Directory Loading |
-| :---: | :---: |
-| <img src="assets/screen3.png" alt="Card confirmation" width="400"/> | <img src="assets/screen4.png" alt="Download completion" width="400"/> |
-| **Premium highlighting and aesthetic Apple-Blue selections.** | **A clean finalized prompt tracking elapsed speeds natively wrapping back to the user.** |
+### Active Stream Polling
+Precision progress hook rendering exact fraction boundaries and live ETA estimates.  
+![Mid-Download Details](assets/screen2.png)
+
+### Instant Selection Confirmation
+Premium highlighting and aesthetic Apple-Blue selections.  
+![Card confirmation](assets/screen3.png)
+
+### Execution & Directory Loading
+A clean finalized prompt tracking elapsed speeds natively wrapping back to the user.  
+![Download completion](assets/screen4.png)
 
 ---
 
