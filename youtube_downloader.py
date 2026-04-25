@@ -663,66 +663,72 @@ class App(ctk.CTk):
         vfmts = [x for x in self._formats if x["type"] == "video"]
         afmts = [x for x in self._formats if x["type"] == "audio"]
 
+        cols = 3
+
         if vfmts:
-            # Video grid (compact)
-            for fmt in vfmts:
-                self._fmt_row(card, fmt)
+            vgrid = ctk.CTkFrame(card, fg_color="transparent")
+            vgrid.pack(fill="x", pady=(4, 10))
+            for i in range(cols):
+                vgrid.grid_columnconfigure(i, weight=1)
+            for i, fmt in enumerate(vfmts):
+                self._fmt_box(vgrid, fmt, i // cols, i % cols)
 
         if afmts:
-            ctk.CTkLabel(
-                card, text="AUDIO ONLY",
-                font=ctk.CTkFont("Segoe UI", 10, "bold"), text_color=P["text3"],
-            ).pack(anchor="w", pady=(10, 4))
-            for fmt in afmts:
-                self._fmt_row(card, fmt)
+            self._section(card, "AUDIO ONLY")
+            agrid = ctk.CTkFrame(card, fg_color="transparent")
+            agrid.pack(fill="x", pady=(4, 10))
+            for i in range(cols):
+                agrid.grid_columnconfigure(i, weight=1)
+            for i, fmt in enumerate(afmts):
+                self._fmt_box(agrid, fmt, i // cols, i % cols)
 
         self._build_download()
 
-    def _fmt_row(self, parent, fmt):
+    def _fmt_box(self, parent, fmt, r, c):
         fr = ctk.CTkFrame(
-            parent, fg_color=P["surface"], corner_radius=8,
-            border_width=1, border_color=P["border"], height=44,
+            parent, fg_color=P["surface"], corner_radius=10,
+            border_width=1, border_color=P["border"], height=130
         )
-        fr.pack(fill="x", pady=2)
+        fr.grid(row=r, column=c, padx=6, pady=6, sticky="nsew")
+        fr.grid_propagate(False)
 
-        # Badge
-        ctk.CTkLabel(
-            fr, text=f" {fmt['badge']} ",
-            font=ctk.CTkFont("Segoe UI", 9, "bold"),
+        top_row = ctk.CTkFrame(fr, fg_color="transparent")
+        top_row.pack(fill="x", padx=12, pady=(12, 0))
+
+        badge = ctk.CTkLabel(
+            top_row, text=f" {fmt['badge']} ",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"),
             text_color="white", fg_color=fmt["color"],
-            corner_radius=5, width=40, height=20,
-        ).pack(side="left", padx=(10, 8), pady=8)
+            corner_radius=4, height=22,
+        )
+        badge.pack(side="left")
 
-        # Label
-        ctk.CTkLabel(
-            fr, text=fmt["label"],
-            font=ctk.CTkFont("Segoe UI", 12, "bold"), text_color=P["white"],
-        ).pack(side="left", padx=(0, 4))
-
-        # Codec
         if fmt.get("vcodec"):
             ctk.CTkLabel(
-                fr, text=fmt["vcodec"],
+                top_row, text=fmt["vcodec"],
                 font=ctk.CTkFont("Segoe UI", 9), text_color=P["dim"],
-            ).pack(side="left", padx=4)
+            ).pack(side="right")
 
-        ctk.CTkFrame(fr, fg_color="transparent").pack(side="left", expand=True)
+        ctk.CTkLabel(
+            fr, text=fmt["label"],
+            font=ctk.CTkFont("Segoe UI", 14, "bold"), text_color=P["white"],
+        ).pack(anchor="w", padx=12, pady=(8, 2))
 
-        # Details
         parts = [p for p in [fmt.get("fps"), fmt.get("bitrate"), fmt.get("size")] if p and p != "—"]
         if parts:
             ctk.CTkLabel(
-                fr, text="  ·  ".join(parts),
-                font=ctk.CTkFont("Segoe UI", 10), text_color=P["text2"],
-            ).pack(side="left", padx=6)
+                fr, text=" • ".join(parts),
+                font=ctk.CTkFont("Segoe UI", 11), text_color=P["text3"],
+            ).pack(anchor="w", padx=12)
 
         btn = ctk.CTkButton(
-            fr, text="Select", width=72, height=28, corner_radius=6,
+            fr, text="Select", corner_radius=6,
             fg_color="transparent", border_width=1, border_color=P["border"],
-            hover_color=P["hover"], text_color=P["text2"],
-            font=ctk.CTkFont("Segoe UI", 10, "bold"),
+            hover_color=P["hover"], text_color=P["text"],
+            font=ctk.CTkFont("Segoe UI", 11, "bold"),
+            height=28,
         )
-        btn.pack(side="right", padx=8, pady=6)
+        btn.pack(side="bottom", fill="x", padx=12, pady=12)
         btn.configure(command=lambda _f=fmt, _b=btn, _fr=fr: self._pick(_f, _b, _fr))
         self._fmt_btns.append((btn, fr))
 
