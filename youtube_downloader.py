@@ -34,34 +34,34 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 # ---------------------------------------------------------------------------
-# MODERN PRO PALETTE
+# LUXURY OBSIDIAN PALETTE
 # ---------------------------------------------------------------------------
 P = {
-    "bg":           "#0f1117",
-    "bg2":          "#151921",
-    "card":         "#1a1f2e",
-    "card2":        "#1e2436",
-    "surface":      "#232a3a",
-    "hover":        "#2a3348",
-    "border":       "#2a3145",
-    "border_hi":    "#3d4a6a",
-    "accent":       "#6366f1",      # Indigo
-    "accent_hi":    "#818cf8",
-    "accent_dim":   "#1e1b4b",
-    "accent2":      "#8b5cf6",      # Violet
-    "success":      "#22c55e",
-    "success_dim":  "#0a2e1a",
-    "warn":         "#f59e0b",
-    "warn_dim":     "#2a1d06",
-    "error":        "#ef4444",
-    "error_dim":    "#2a0a0a",
-    "cyan":         "#06b6d4",
-    "pink":         "#ec4899",
-    "white":        "#f1f5f9",
-    "text":         "#cbd5e1",
-    "text2":        "#94a3b8",
-    "text3":        "#64748b",
-    "dim":          "#475569",
+    "bg":           "#050505",      # Pitch sleek black
+    "bg2":          "#0a0a0a",      # Slightly lighter back
+    "card":         "#121212",      # Metal slate card
+    "card2":        "#181818",
+    "surface":      "#1f1f1f",      # Surface interactions
+    "hover":        "#2c2c2e",      # Hover slate
+    "border":       "#2c2c2e",      # Subtle borders 
+    "border_hi":    "#3a3a3c",
+    "accent":       "#0a84ff",      # Apple System Blue
+    "accent_hi":    "#409cff",
+    "accent_dim":   "#002A5A",
+    "accent2":      "#5e5ce6",      # System indigo
+    "success":      "#32d74b",      # Emerald
+    "success_dim":  "#0f3d1b",
+    "warn":         "#ff9f0a",
+    "warn_dim":     "#3b2300",
+    "error":        "#ff453a",
+    "error_dim":    "#4a0e0b",
+    "cyan":         "#64d2ff",
+    "pink":         "#ff375f",
+    "white":        "#ffffff",
+    "text":         "#ebebf5",
+    "text2":        "#c7c7cc",      # Standard secondary
+    "text3":        "#8e8e93",      # Frosted grey
+    "dim":          "#636366",
 }
 
 # ---------------------------------------------------------------------------
