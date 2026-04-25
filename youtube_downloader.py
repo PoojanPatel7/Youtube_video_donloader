@@ -161,6 +161,7 @@ def base_opts(extra=None):
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
+        "color": "no_color",
         "socket_timeout": 30,
         "retries": 5,
         "abort_on_unavailable_fragments": False,
@@ -966,23 +967,35 @@ class App(ctk.CTk):
 
         def hook(d):
             if d["status"] == "downloading":
-                try:
-                    pct = float(d.get("_percent_str", "0%").strip().rstrip("%")) / 100
-                except (ValueError, TypeError):
-                    pct = 0
+                dl_bytes = d.get("downloaded_bytes")
+                total_bytes = d.get("total_bytes") or d.get("total_bytes_estimate")
 
-                downloaded = d.get("_downloaded_bytes_str", "").strip() or "—"
-                total      = (d.get("_total_bytes_str", "")
-                              or d.get("_total_bytes_estimate_str", "")).strip() or "—"
+                if dl_bytes and total_bytes and total_bytes > 0:
+                    pct = dl_bytes / total_bytes
+                else:
+                    try:
+                        pct_str = re.sub(r'\x1b\[[0-9;]*m', '', d.get("_percent_str", "0%"))
+                        pct = float(pct_str.strip().rstrip("%")) / 100
+                    except (ValueError, TypeError):
+                        pct = 0
+
+                downloaded = d.get("_downloaded_bytes_str", "").strip()
+                total      = (d.get("_total_bytes_str", "") or d.get("_total_bytes_estimate_str", "")).strip()
                 speed      = d.get("_speed_str", "").strip() or "—"
                 eta        = d.get("_eta_str", "").strip() or ""
-                pct_int    = int(pct * 100)
 
-                def upd(p=pct, pi=pct_int, dl=downloaded, tt=total, sp=speed, et=eta):
+                downloaded = re.sub(r'\x1b\[[0-9;]*m', '', downloaded)
+                total = re.sub(r'\x1b\[[0-9;]*m', '', total)
+                speed = re.sub(r'\x1b\[[0-9;]*m', '', speed)
+                eta = re.sub(r'\x1b\[[0-9;]*m', '', eta)
+
+                pct_display = f"{pct * 100:.1f}%"
+
+                def upd(p=pct, pd=pct_display, dl=downloaded, tt=total, sp=speed, et=eta):
                     self._prog.set(p)
-                    self._pct_lbl.configure(text=f"{pi}%")
-                    self._stat_labels["Downloaded"].configure(text=dl)
-                    self._stat_labels["Total"].configure(text=tt)
+                    self._pct_lbl.configure(text=pd)
+                    self._stat_labels["Downloaded"].configure(text=dl or "—")
+                    self._stat_labels["Total"].configure(text=tt or "—")
                     self._stat_labels["Speed"].configure(text=sp)
                     if et:
                         self._eta_lbl.configure(text=f"ETA {et}")
@@ -991,7 +1004,7 @@ class App(ctk.CTk):
             elif d["status"] == "finished":
                 def fin():
                     self._prog.set(1.0)
-                    self._pct_lbl.configure(text="Merging...")
+                    self._pct_lbl.configure(text="100.0%")
                     self._stat_labels["Speed"].configure(text="Processing")
                     self._eta_lbl.configure(text="Almost done")
                 self.after(0, fin)
