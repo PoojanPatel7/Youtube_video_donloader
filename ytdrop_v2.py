@@ -271,22 +271,29 @@ class BrowserApp(ctk.CTk):
     # ── URL Polling ──
     def _poll_url(self):
         try:
-            url=self._browser.get_url()
-            if url and url!=self._current_url:
-                self._current_url=url
-                self._url_var.set(url)
-                was_video=self._is_video
-                self._is_video=self._check_video_url(url)
-                if self._is_video:
-                    self._dl_toggle.configure(fg_color=P["accent"],hover_color=P["accent2"],
-                        text_color="white",state="normal",text="⬇ Download")
-                    self._status.configure(text="Video detected!",text_color=P["success"])
-                else:
-                    self._dl_toggle.configure(fg_color=P["surface"],hover_color=P["hover"],
-                        text_color=P["dim"],state="disabled",text="⬇ Download")
-                    if was_video:
-                        self._status.configure(text="Browsing",text_color=P["text3"])
-                        if self._panel_open: self._toggle_panel()
+            def _update_ui(url):
+                if url and url!=self._current_url:
+                    self._current_url=url
+                    self._url_var.set(url)
+                    was_video=self._is_video
+                    self._is_video=self._check_video_url(url)
+                    if self._is_video:
+                        self._dl_toggle.configure(fg_color=P["accent"],hover_color=P["accent2"],
+                            text_color="white",state="normal",text="⬇ Download")
+                        self._status.configure(text="Video detected!",text_color=P["success"])
+                    else:
+                        self._dl_toggle.configure(fg_color=P["surface"],hover_color=P["hover"],
+                            text_color=P["dim"],state="disabled",text="⬇ Download")
+                        if was_video:
+                            self._status.configure(text="Browsing",text_color=P["text3"])
+                            if self._panel_open: self._toggle_panel()
+
+            def _cb(url_result):
+                if not url_result: return
+                url = str(url_result).strip('"').strip("'")
+                self.after(0, lambda: _update_ui(url))
+
+            self._browser.evaluate_js("window.location.href", callback=_cb)
         except: pass
         self.after(1000,self._poll_url)
 
