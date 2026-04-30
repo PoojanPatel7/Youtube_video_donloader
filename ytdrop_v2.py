@@ -596,17 +596,11 @@ class BrowserApp(ctk.CTk):
 
 # ===========================================================================
 if __name__=="__main__":
-    def go():
-        try:
-            BrowserApp().mainloop()
-        except Exception as e:
-            print(f"App error: {e}")
-
-    import clr
-    clr.AddReference('System.Threading')
-    from System.Threading import Thread, ApartmentState, ThreadStart
-    
-    t = Thread(ThreadStart(go))
-    t.ApartmentState = ApartmentState.STA
-    t.Start()
-    t.Join()
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+        BrowserApp().mainloop()
+    except Exception as e:
+        import traceback
+        with open("error_log.txt", "a") as f:
+            f.write(f"App error: {traceback.format_exc()}\n")
